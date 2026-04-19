@@ -33,12 +33,14 @@ graph TB
         M[Stripe API]
         S[Clerk API]
         Q[SQLite Database]
+        V[Resend API]
     end
 
     subgraph "Core Services"
         O[Provisioning Service]
         T[Prisma Client]
         U[Clerk Backend SDK]
+        W[Email Service]
     end
 
     A --> H
@@ -48,6 +50,8 @@ graph TB
     N --> U
     O --> T
     O --> S
+    O --> W
+    W --> V
     T --> Q
     P --> T
     R --> T
@@ -65,7 +69,7 @@ src/
         route.ts                # Stripe Checkout session creation
       webhook/
         stripe/
-          route.ts              # Stripe webhook handler
+          route.ts              # Stripe webhook handler + email trigger
       provisioning-status/
         route.ts                # Provisioning status polling
       user/
@@ -91,6 +95,7 @@ src/
     constants.ts                # Shared constants
   services/                     # Business logic
     provision-user.ts           # Idempotent user provisioning
+    send-confirmation-email.ts  # Resend email service
 prisma/
   schema.prisma                 # Database schema
   dev.db                       # SQLite database file
@@ -123,38 +128,40 @@ prisma/
 
 ## Current Implementation State
 
-### Phase: Hybrid (Clerk UI + Hardcoded Backend)
+### Phase: Complete Production-Ready Flow
 
 **What's Working:**
 - Clerk authentication (sign-in/sign-up/logout)
 - Route protection for `/dashboard` and `/thank-you`
 - Auth-aware UI on landing page and dashboard
-- Existing Stripe flow (for test user)
+- Real user checkout with Clerk identity
+- Webhook provisioning by `clerkId` with dual write (Prisma + Clerk metadata)
+- Confirmation email via Resend after successful provisioning
+- All API routes gated by `auth()`
 
-**Current Gap:**
-- Frontend uses Clerk identity, but backend still operates on `TEST_USER_EMAIL`
-- Checkout creates sessions for `test@example.com`, not actual signed-in user
-- Webhook provisions by email lookup, not Clerk ID
-- API routes return hardcoded test user data
-
-**Identity Flow (Current vs Target):**
+**Identity Flow (Complete):**
 ```
-CURRENT: Real User Sign In -> Subscribe -> Creates session for test@example.com -> Webhook provisions test@example.com
-TARGET:  Real User Sign In -> Subscribe -> Creates session for real user -> Webhook provisions real user
+Real User Sign In -> Subscribe with real email -> Stripe webhook -> Provision by clerkId -> Email confirmation -> Dashboard shows real user data
 ```
 
-**Next Steps:**
-1. Add `clerkId` field to Prisma User model
-2. Update checkout to use Clerk `auth()` and pass `clerkId` in metadata
-3. Update webhook to sync Clerk metadata + Prisma by `clerkId`
-4. Update API routes to use `auth()` for user identification
-5. Remove `TEST_USER_EMAIL` dependency
+**Architecture Highlights:**
+- **Dual Write Pattern**: Webhook updates both Prisma (source of truth) and Clerk metadata (fast client reads)
+- **Non-Blocking Email**: Email failures don't break provisioning
+- **Separation of Concerns**: Dedicated services for provisioning and email
+- **Best Practices**: Clerk `clerkId` as primary key, error handling, idempotency
+
+**Production Considerations:**
+- Replace `onboarding@resend.dev` with verified domain in Resend
+- Configure production Clerk keys
+- Set up production Stripe webhook endpoint
+- Consider email templates and branding
 
 ### Core Services
 
 | Service | Responsibility | Key Features |
 |---------|----------------|--------------|
 | **Provisioning Service** | Idempotent user provisioning | Atomic upsert, plan management |
+| **Email Service** | Confirmation email delivery | Resend integration, non-blocking |
 | **Prisma Client** | Database connection management | Singleton pattern, SQLite adapter |
 | **Stripe Client** | Payment processing | Lazy initialization, error handling |
 
