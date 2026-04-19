@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { provisionUser } from '@/services/provision-user'
+import { sendConfirmationEmail } from '@/services/send-confirmation-email'
 import { env } from '@/lib/env'
 import { clerkClient } from '@clerk/nextjs/server'
 
@@ -93,6 +94,13 @@ export async function POST(request: NextRequest) {
       }
 
       console.log('User provisioned successfully:', email)
+
+      // Send confirmation email (non-blocking — don't fail webhook if email fails)
+      try {
+        await sendConfirmationEmail({ email, plan })
+      } catch (emailError) {
+        console.error('Failed to send confirmation email:', emailError)
+      }
     }
 
     return NextResponse.json({ received: true })
