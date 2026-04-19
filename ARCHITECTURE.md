@@ -1,45 +1,57 @@
 # Stripe Subscription Prototype Architecture
 
 ## Overview
-A Next.js 16 application with Prisma v7 and Stripe integration for subscription-based access control.
+A Next.js 16 application with Clerk authentication, Prisma v7, and Stripe integration for subscription-based access control.
 
 ## Architecture Flow
 
 ```mermaid
 graph TB
-    subgraph "Frontend (Next.js App Router)"
-        A[Landing Page] -->|Click Subscribe| B[Stripe Checkout]
-        B -->|Payment Success| C[Thank You Page]
-        C -->|Poll Status| D[Provisioning Status API]
-        D -->|Provisioned| E[Dashboard]
-        E -->|Check Access| F[User API]
+    subgraph "Frontend (Next.js App Router + Clerk)"
+        A[Landing Page] -->|Sign In Required| B[Clerk Auth]
+        B -->|Click Subscribe| C[Stripe Checkout]
+        C -->|Payment Success| D[Thank You Page]
+        D -->|Poll Status| E[Provisioning Status API]
+        E -->|Provisioned| F[Dashboard]
+        F -->|Check Access| G[User API]
+    end
+
+    subgraph "Authentication Layer"
+        H[Clerk Provider] --> I[Clerk Middleware]
+        I --> J[Sign In/Sign Up Pages]
+        H --> K[UserButton/SignOutButton]
     end
 
     subgraph "Backend (API Routes)"
-        G[/api/checkout] --> H[Stripe API]
-        I[/api/webhook/stripe] --> J[Provisioning Service]
-        K[/api/provisioning-status] --> L[Prisma DB]
-        M[/api/user] --> L
+        L[/api/checkout] --> M[Stripe API]
+        N[/api/webhook/stripe] --> O[Provisioning Service]
+        P[/api/provisioning-status] --> Q[Prisma DB]
+        R[/api/user] --> Q
     end
 
     subgraph "External Services"
-        H[Stripe API]
-        N[SQLite Database]
+        M[Stripe API]
+        S[Clerk API]
+        Q[SQLite Database]
     end
 
     subgraph "Core Services"
-        J[Provisioning Service]
-        O[Prisma Client]
+        O[Provisioning Service]
+        T[Prisma Client]
+        U[Clerk Backend SDK]
     end
 
-    A --> G
-    C --> K
-    I --> J
-    J --> O
-    O --> N
-    L --> O
-    M --> O
-    E --> M
+    A --> H
+    B --> L
+    D --> P
+    N --> O
+    N --> U
+    O --> T
+    O --> S
+    T --> Q
+    P --> T
+    R --> T
+    F --> R
 ```
 
 ## Directory Structure
@@ -62,9 +74,16 @@ src/
       page.tsx                  # Pro user dashboard
     thank-you/
       page.tsx                  # Post-payment polling page
+    sign-in/
+      [[...sign-in]]/
+        page.tsx                # Clerk sign-in page
+    sign-up/
+      [[...sign-up]]/
+        page.tsx                # Clerk sign-up page
     page.tsx                    # Landing page with Subscribe button
-    layout.tsx                  # Root layout
+    layout.tsx                  # Root layout with ClerkProvider
     globals.css                 # Global styles
+  middleware.ts                 # Clerk middleware for route protection
   lib/                          # Shared utilities
     prisma.ts                   # Prisma client singleton
     stripe.ts                   # Stripe client (lazy init)
@@ -85,10 +104,13 @@ prisma/
 
 | Component | Responsibility | Dependencies |
 |-----------|----------------|--------------|
-| **Landing Page** | Display subscription offer, initiate checkout | `/api/checkout` |
+| **Landing Page** | Auth-aware subscription offer, conditional UI, logout | Clerk `useUser`, `/api/checkout` |
 | **Thank You Page** | Poll provisioning status, redirect when ready | `/api/provisioning-status` |
-| **Dashboard** | Show user status and Pro features | `/api/user` |
-| **Layout** | Global styling and structure | Tailwind/CSS |
+| **Dashboard** | Show user status and Pro features, logout | `/api/user`, Clerk `UserButton`/`SignOutButton` |
+| **Layout** | Global styling, Clerk provider context | ClerkProvider, Tailwind/CSS |
+| **Sign In Page** | Clerk authentication flow | Clerk `<SignIn />` |
+| **Sign Up Page** | Clerk registration flow | Clerk `<SignUp />` |
+| **Middleware** | Route protection, auth enforcement | Clerk `clerkMiddleware` |
 
 ### API Routes
 
@@ -98,6 +120,35 @@ prisma/
 | `/api/webhook/stripe` | POST | Handle Stripe webhook events | Provisioning Service |
 | `/api/provisioning-status` | GET | Check user provisioning status | Prisma DB |
 | `/api/user` | GET | Get current user data | Prisma DB |
+
+## Current Implementation State
+
+### Phase: Hybrid (Clerk UI + Hardcoded Backend)
+
+**What's Working:**
+- Clerk authentication (sign-in/sign-up/logout)
+- Route protection for `/dashboard` and `/thank-you`
+- Auth-aware UI on landing page and dashboard
+- Existing Stripe flow (for test user)
+
+**Current Gap:**
+- Frontend uses Clerk identity, but backend still operates on `TEST_USER_EMAIL`
+- Checkout creates sessions for `test@example.com`, not actual signed-in user
+- Webhook provisions by email lookup, not Clerk ID
+- API routes return hardcoded test user data
+
+**Identity Flow (Current vs Target):**
+```
+CURRENT: Real User Sign In -> Subscribe -> Creates session for test@example.com -> Webhook provisions test@example.com
+TARGET:  Real User Sign In -> Subscribe -> Creates session for real user -> Webhook provisions real user
+```
+
+**Next Steps:**
+1. Add `clerkId` field to Prisma User model
+2. Update checkout to use Clerk `auth()` and pass `clerkId` in metadata
+3. Update webhook to sync Clerk metadata + Prisma by `clerkId`
+4. Update API routes to use `auth()` for user identification
+5. Remove `TEST_USER_EMAIL` dependency
 
 ### Core Services
 
