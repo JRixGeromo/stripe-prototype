@@ -1,6 +1,10 @@
 'use client'
 
+import { SignInButton, UserButton, useUser } from '@clerk/nextjs'
+
 export default function Home() {
+  const { isSignedIn } = useUser()
+
   const handleSubscribe = async () => {
     try {
       const response = await fetch('/api/checkout', {
@@ -22,21 +26,34 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb' }}>
+      <div style={{ maxWidth: '448px', width: '100%', padding: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+          {isSignedIn ? (
+            <UserButton />
+          ) : (
+            <SignInButton />
+          )}
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <h1 style={{ fontSize: '30px', fontWeight: 'bold', color: '#111827', marginBottom: '16px' }}>
             Prototype App
           </h1>
-          <p className="text-gray-600 mb-8">
+          <p style={{ color: '#6b7280', marginBottom: '32px' }}>
             Upgrade to Pro to unlock premium features
           </p>
-          <button
-            onClick={handleSubscribe}
-            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-          >
-            Subscribe to Pro
-          </button>
+          {isSignedIn ? (
+            <button
+              onClick={handleSubscribe}
+              style={{ width: '100%', backgroundColor: '#2563eb', color: 'white', padding: '12px 16px', borderRadius: '8px', fontWeight: '600', border: 'none', cursor: 'pointer' }}
+            >
+              Subscribe to Pro
+            </button>
+          ) : (
+            <p style={{ color: '#6b7280', fontSize: '14px' }}>
+              Sign in to subscribe
+            </p>
+          )}
         </div>
       </div>
     </div>
