@@ -5,7 +5,9 @@ export interface ProvisionUserData {
   email: string
   plan: 'free' | 'pro'
   stripeCustomerId?: string
-  stripeSessionId?: string
+  stripeSubscriptionId?: string
+  subscriptionStatus?: 'inactive' | 'active' | 'past_due' | 'canceled' | 'unpaid'
+  priceId?: string
 }
 
 export async function provisionUser(data: ProvisionUserData) {
@@ -17,7 +19,9 @@ export async function provisionUser(data: ProvisionUserData) {
         plan: data.plan,
         isProvisioned: true,
         stripeCustomerId: data.stripeCustomerId,
-        stripeSessionId: data.stripeSessionId,
+        stripeSubscriptionId: data.stripeSubscriptionId,
+        subscriptionStatus: data.subscriptionStatus || 'active',
+        priceId: data.priceId,
       },
       create: {
         clerkId: data.clerkId,
@@ -25,7 +29,9 @@ export async function provisionUser(data: ProvisionUserData) {
         plan: data.plan,
         isProvisioned: true,
         stripeCustomerId: data.stripeCustomerId,
-        stripeSessionId: data.stripeSessionId,
+        stripeSubscriptionId: data.stripeSubscriptionId,
+        subscriptionStatus: data.subscriptionStatus || 'active',
+        priceId: data.priceId,
       },
     })
 

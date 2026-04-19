@@ -16,22 +16,39 @@ enum Plan {
   pro
 }
 
+enum SubscriptionStatus {
+  inactive
+  active
+  past_due
+  canceled
+  unpaid
+}
+
+enum WebhookEventStatus {
+  processing
+  processed
+  failed
+}
+
 model User {
-  id                String   @id @default(cuid())
-  clerkId           String   @unique
-  email             String   @unique
-  plan              Plan     @default(free)
-  isProvisioned     Boolean  @default(false)
-  stripeCustomerId  String?
-  stripeSessionId   String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                     String              @id @default(cuid())
+  clerkId                String              @unique
+  email                  String              @unique
+  plan                   Plan                @default(free)
+  isProvisioned          Boolean             @default(false)
+  stripeCustomerId       String?
+  stripeSubscriptionId   String?
+  subscriptionStatus     SubscriptionStatus  @default(inactive)
+  priceId                String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 }
 
 model WebhookEvent {
-  id          String   @id @default(cuid())
-  eventId     String   @unique
+  id          String              @id @default(cuid())
+  eventId     String              @unique
   type        String
-  processedAt DateTime @default(now())
-  createdAt   DateTime @default(now())
+  status      WebhookEventStatus  @default(processing)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 }

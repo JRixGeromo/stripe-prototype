@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         plan: 'free',
         isProvisioned: false,
+        subscriptionStatus: 'inactive',
       })
     }
 
@@ -28,6 +29,8 @@ export async function GET(request: NextRequest) {
       email: user.email,
       plan: user.plan,
       isProvisioned: user.isProvisioned,
+      subscriptionStatus: user.subscriptionStatus,
+      priceId: user.priceId,
     })
   } catch (error) {
     console.error('Error fetching user:', error)

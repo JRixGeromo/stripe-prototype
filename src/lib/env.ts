@@ -19,6 +19,7 @@ export const env = {
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY!,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+    priceId: process.env.STRIPE_PRICE_ID!,
   },
   database: {
     url: process.env.DATABASE_URL!,

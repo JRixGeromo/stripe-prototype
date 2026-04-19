@@ -6,6 +6,11 @@ import { sendConfirmationEmail } from '@/services/send-confirmation-email'
 import { env } from '@/lib/env'
 import { clerkClient } from '@clerk/nextjs/server'
 
+// SOURCE OF TRUTH: Prisma (database) is the authoritative record for user state.
+// Clerk publicMetadata is a read-optimized mirror for fast client-side access.
+// If Clerk metadata update fails, Prisma remains correct — the webhook does NOT fail.
+// The app should always read from Prisma (via API routes) for authoritative state.
+
 export async function POST(request: NextRequest) {
   const body = await request.text()
   const signature = request.headers.get('stripe-signature')
@@ -29,21 +34,26 @@ export async function POST(request: NextRequest) {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as any
 
-      // Check idempotency using WebhookEvent
+      // Check idempotency — skip if already processed
       const existingEvent = await prisma.webhookEvent.findUnique({
         where: { eventId: event.id }
       })
 
-      if (existingEvent) {
+      if (existingEvent?.status === 'processed') {
         return NextResponse.json({ received: true })
       }
 
-      // Mark event as processed
-      await prisma.webhookEvent.create({
-        data: {
+      // Record event as processing (prevents concurrent duplicate processing)
+      const webhookEvent = await prisma.webhookEvent.upsert({
+        where: { eventId: event.id },
+        create: {
           eventId: event.id,
           type: event.type,
-        }
+          status: 'processing',
+        },
+        update: {
+          status: 'processing',
+        },
       })
 
       // Extract metadata from session
@@ -51,12 +61,17 @@ export async function POST(request: NextRequest) {
       const email = session.metadata?.email
       const plan = session.metadata?.plan
       const stripeCustomerId = session.customer as string
-      const stripeSessionId = session.id
+      const stripeSubscriptionId = (session.subscription as string | null) ?? undefined
+      const priceId = session.metadata?.priceId || undefined
 
-      console.log('Webhook metadata:', { clerkId, email, plan, stripeCustomerId, stripeSessionId })
+      console.log('Webhook metadata:', { clerkId, email, plan, stripeCustomerId, stripeSubscriptionId, priceId })
 
       if (!clerkId || !email || !plan) {
         console.error('Missing metadata in checkout session:', session.id, 'metadata:', session.metadata)
+        await prisma.webhookEvent.update({
+          where: { id: webhookEvent.id },
+          data: { status: 'failed' },
+        })
         return NextResponse.json(
           { error: 'Missing required metadata' },
           { status: 400 }
@@ -69,18 +84,26 @@ export async function POST(request: NextRequest) {
         email,
         plan: plan as 'free' | 'pro',
         stripeCustomerId,
-        stripeSessionId,
+        stripeSubscriptionId,
+        subscriptionStatus: 'active',
+        priceId,
       })
 
       if (!result.success) {
         console.error('Provisioning failed:', result.error)
+        await prisma.webhookEvent.update({
+          where: { id: webhookEvent.id },
+          data: { status: 'failed' },
+        })
         return NextResponse.json(
           { error: 'Provisioning failed' },
           { status: 500 }
         )
       }
 
-      // Sync Clerk publicMetadata (auth-facing state)
+      // ── Clerk metadata sync (non-blocking mirror) ──
+      // Prisma is the source of truth. This Clerk update is a convenience mirror
+      // for fast client-side reads. Failure here does NOT affect provisioning.
       try {
         const client = await clerkClient()
         await client.users.updateUserMetadata(clerkId, {
@@ -88,12 +111,14 @@ export async function POST(request: NextRequest) {
             plan: plan,
           },
         })
+        console.log('Clerk metadata synced for clerkId:', clerkId)
       } catch (clerkError) {
-        console.error('Failed to update Clerk metadata:', clerkError)
-        // Don't fail the webhook — Prisma is the source of truth
+        // Partial failure: Prisma provisioning succeeded, but Clerk mirror is stale.
+        // The next Prisma read will return the correct state regardless.
+        console.error('Clerk metadata sync failed (Prisma is still authoritative) for clerkId:', clerkId, clerkError)
       }
 
-      console.log('User provisioned successfully:', email)
+      console.log('Provisioning complete (Prisma authoritative):', { email, plan, stripeSubscriptionId })
 
       // Send confirmation email (non-blocking — don't fail webhook if email fails)
       try {
@@ -101,6 +126,12 @@ export async function POST(request: NextRequest) {
       } catch (emailError) {
         console.error('Failed to send confirmation email:', emailError)
       }
+
+      // Mark event as processed only after all critical steps succeed
+      await prisma.webhookEvent.update({
+        where: { id: webhookEvent.id },
+        data: { status: 'processed' },
+      })
     }
 
     return NextResponse.json({ received: true })

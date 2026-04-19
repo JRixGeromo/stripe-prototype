@@ -20,32 +20,41 @@ export async function POST(request: NextRequest) {
       e => e.id === clerkUser.primaryEmailAddressId
     )?.emailAddress
 
+    if (!email) {
+      return NextResponse.json(
+        { error: 'User email is required for checkout' },
+        { status: 400 }
+      )
+    }
+
+    if (!env.stripe.priceId) {
+      console.error('STRIPE_PRICE_ID is not configured')
+      return NextResponse.json(
+        { error: 'Subscription pricing is not configured' },
+        { status: 500 }
+      )
+    }
+
     const stripe = getStripe()
 
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
+      mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
         {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: 'Pro Plan',
-              description: 'Access to all premium features',
-            },
-            unit_amount: 999, // $9.99
-          },
+          price: env.stripe.priceId,
           quantity: 1,
         },
       ],
-      success_url: `${env.app.url}/thank-you`,
+      success_url: `${env.app.url}/thank-you?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${env.app.url}/`,
       metadata: {
         clerkId: userId,
-        email: email || '',
+        email,
         plan: 'pro',
+        priceId: env.stripe.priceId,
       },
-      customer_email: email || undefined,
+      customer_email: email,
     })
 
     return NextResponse.json({ url: session.url })

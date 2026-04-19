@@ -277,12 +277,11 @@ Dashboard loads
 
 ### Current Limitations
 - SQLite for prototype (switch to PostgreSQL for production)
-- Single test user email (multi-tenant requires auth)
 - In-memory Prisma client (connection pooling needed for scale)
 
 ### Production Readiness
 - Replace SQLite with PostgreSQL
-- Add user authentication system
 - Implement connection pooling
 - Add monitoring and logging
 - Configure proper error reporting
+- Verify custom domain in Resend for email sending
