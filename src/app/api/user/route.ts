@@ -1,17 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { TEST_USER_EMAIL } from '@/lib/constants'
 
 export async function GET(request: NextRequest) {
   try {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const user = await prisma.user.findUnique({
-      where: { email: TEST_USER_EMAIL },
+      where: { clerkId: userId },
     })
 
     // Return safe defaults if user doesn't exist yet
     if (!user) {
       return NextResponse.json({
-        email: TEST_USER_EMAIL,
         plan: 'free',
         isProvisioned: false,
       })

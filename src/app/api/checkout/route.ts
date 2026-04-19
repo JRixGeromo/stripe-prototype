@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth, clerkClient } from '@clerk/nextjs/server'
 import { getStripe } from '@/lib/stripe'
-import { TEST_USER_EMAIL } from '@/lib/constants'
 import { env } from '@/lib/env'
 
 export async function POST(request: NextRequest) {
   try {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    // Get user email from Clerk
+    const client = await clerkClient()
+    const clerkUser = await client.users.getUser(userId)
+    const email = clerkUser.emailAddresses.find(
+      e => e.id === clerkUser.primaryEmailAddressId
+    )?.emailAddress
+
     const stripe = getStripe()
 
     const session = await stripe.checkout.sessions.create({
@@ -26,10 +41,11 @@ export async function POST(request: NextRequest) {
       success_url: `${env.app.url}/thank-you`,
       cancel_url: `${env.app.url}/`,
       metadata: {
-        email: TEST_USER_EMAIL,
+        clerkId: userId,
+        email: email || '',
         plan: 'pro',
       },
-      customer_email: TEST_USER_EMAIL,
+      customer_email: email || undefined,
     })
 
     return NextResponse.json({ url: session.url })

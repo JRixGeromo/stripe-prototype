@@ -3,6 +3,7 @@ import { getStripe } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { provisionUser } from '@/services/provision-user'
 import { env } from '@/lib/env'
+import { clerkClient } from '@clerk/nextjs/server'
 
 export async function POST(request: NextRequest) {
   const body = await request.text()
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Handle checkout.session.completed event
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as any
-      
+
       // Check idempotency using WebhookEvent
       const existingEvent = await prisma.webhookEvent.findUnique({
         where: { eventId: event.id }
@@ -45,21 +46,25 @@ export async function POST(request: NextRequest) {
       })
 
       // Extract metadata from session
+      const clerkId = session.metadata?.clerkId
       const email = session.metadata?.email
       const plan = session.metadata?.plan
       const stripeCustomerId = session.customer as string
       const stripeSessionId = session.id
 
-      if (!email || !plan) {
-        console.error('Missing metadata in checkout session:', session.id)
+      console.log('Webhook metadata:', { clerkId, email, plan, stripeCustomerId, stripeSessionId })
+
+      if (!clerkId || !email || !plan) {
+        console.error('Missing metadata in checkout session:', session.id, 'metadata:', session.metadata)
         return NextResponse.json(
           { error: 'Missing required metadata' },
           { status: 400 }
         )
       }
 
-      // Call provisioning service
+      // Call provisioning service (Prisma sync)
       const result = await provisionUser({
+        clerkId,
         email,
         plan: plan as 'free' | 'pro',
         stripeCustomerId,
@@ -74,13 +79,26 @@ export async function POST(request: NextRequest) {
         )
       }
 
+      // Sync Clerk publicMetadata (auth-facing state)
+      try {
+        const client = await clerkClient()
+        await client.users.updateUserMetadata(clerkId, {
+          publicMetadata: {
+            plan: plan,
+          },
+        })
+      } catch (clerkError) {
+        console.error('Failed to update Clerk metadata:', clerkError)
+        // Don't fail the webhook — Prisma is the source of truth
+      }
+
       console.log('User provisioned successfully:', email)
     }
 
     return NextResponse.json({ received: true })
   } catch (error) {
     console.error('Webhook error:', error)
-    
+
     if (error instanceof Error && error.message.includes('signature')) {
       return NextResponse.json(
         { error: 'Invalid signature' },

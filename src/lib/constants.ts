@@ -1,1 +1,1 @@
-export const TEST_USER_EMAIL = 'test@example.com'
+// Clerk identity is now used instead of hardcoded test user email

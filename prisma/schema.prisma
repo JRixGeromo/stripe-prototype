@@ -18,6 +18,7 @@ enum Plan {
 
 model User {
   id                String   @id @default(cuid())
+  clerkId           String   @unique
   email             String   @unique
   plan              Plan     @default(free)
   isProvisioned     Boolean  @default(false)

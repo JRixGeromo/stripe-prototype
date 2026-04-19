@@ -4,10 +4,13 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function ThankYouPage() {
-  const [status, setStatus] = useState<'processing' | 'completed' | 'error'>('processing')
+  const [status, setStatus] = useState<'processing' | 'completed' | 'error' | 'timeout'>('processing')
   const router = useRouter()
 
   useEffect(() => {
+    let elapsed = 0
+    const MAX_WAIT = 60000 // 60 seconds
+
     const pollStatus = async () => {
       try {
         const response = await fetch('/api/provisioning-status')
@@ -25,44 +28,79 @@ export default function ThankYouPage() {
       }
     }
 
-    const interval = setInterval(pollStatus, 2000)
+    const interval = setInterval(() => {
+      elapsed += 2000
+      if (elapsed >= MAX_WAIT) {
+        setStatus('timeout')
+        clearInterval(interval)
+        return
+      }
+      pollStatus()
+    }, 2000)
+
+    // Initial poll
+    pollStatus()
 
     return () => clearInterval(interval)
   }, [router])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb' }}>
+      <div style={{ maxWidth: '448px', width: '100%', padding: '32px', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '30px', fontWeight: 'bold', color: '#111827', marginBottom: '16px' }}>
           Thank You!
         </h1>
-        
+
         {status === 'processing' && (
           <div>
-            <p className="text-gray-600 mb-4">
+            <p style={{ color: '#6b7280', marginBottom: '16px' }}>
               Setting up your Pro account...
             </p>
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              borderTop: '2px solid #2563eb',
+              margin: '0 auto',
+              animation: 'spin 1s linear infinite'
+            }}></div>
           </div>
         )}
 
         {status === 'completed' && (
           <div>
-            <p className="text-green-600 font-semibold mb-4">
+            <p style={{ color: '#059669', fontWeight: '600', marginBottom: '16px' }}>
               Your Pro account is ready!
             </p>
-            <p className="text-gray-600">
+            <p style={{ color: '#6b7280' }}>
               Redirecting to your dashboard...
             </p>
           </div>
         )}
 
+        {status === 'timeout' && (
+          <div>
+            <p style={{ color: '#d97706', fontWeight: '600', marginBottom: '16px' }}>
+              Taking longer than expected
+            </p>
+            <p style={{ color: '#6b7280', marginBottom: '16px' }}>
+              Your payment was successful. Provisioning may take a moment.
+            </p>
+            <button
+              onClick={() => router.push('/dashboard')}
+              style={{ backgroundColor: '#2563eb', color: 'white', padding: '10px 24px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: '600' }}
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        )}
+
         {status === 'error' && (
           <div>
-            <p className="text-red-600 font-semibold mb-4">
+            <p style={{ color: '#dc2626', fontWeight: '600', marginBottom: '16px' }}>
               Something went wrong
             </p>
-            <p className="text-gray-600">
+            <p style={{ color: '#6b7280' }}>
               Please contact support if the issue persists.
             </p>
           </div>
