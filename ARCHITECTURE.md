@@ -9,11 +9,13 @@ A Next.js 16 application with Clerk authentication, Prisma v7, and Stripe integr
 graph TB
     subgraph "Frontend (Next.js App Router + Clerk)"
         A[Landing Page] -->|Sign In Required| B[Clerk Auth]
-        B -->|Click Subscribe| C[Stripe Checkout]
+        A -->|Click Subscribe| L["/api/checkout"]
+        L --> M[Stripe API]
+        M --> C[Stripe Checkout]
         C -->|Payment Success| D[Thank You Page]
-        D -->|Poll Status| E[Provisioning Status API]
-        E -->|Provisioned| F[Dashboard]
-        F -->|Check Access| G[User API]
+        D -->|Poll Status| P["/api/provisioning-status"]
+        D -->|If provisioned, redirect| F[Dashboard]
+        F --> R["/api/user"]
     end
 
     subgraph "Authentication Layer"
@@ -23,16 +25,17 @@ graph TB
     end
 
     subgraph "Backend (API Routes)"
-        L[/api/checkout] --> M[Stripe API]
-        N[/api/webhook/stripe] --> O[Provisioning Service]
-        P[/api/provisioning-status] --> Q[Prisma DB]
-        R[/api/user] --> Q
+        L["/api/checkout"] --> M[Stripe API]
+        N["/api/webhook/stripe"] --> O[Provisioning Service]
+        N --> W[Email Service]
+        P["/api/provisioning-status"] --> T[Prisma Client]
+        R["/api/user"] --> T[Prisma Client]
     end
 
     subgraph "External Services"
         M[Stripe API]
         S[Clerk API]
-        Q[SQLite Database]
+        Q[(Database)]
         V[Resend API]
     end
 
@@ -43,19 +46,11 @@ graph TB
         W[Email Service]
     end
 
-    A --> H
-    B --> L
-    D --> P
-    N --> O
     N --> U
+    U --> S
     O --> T
-    O --> S
-    O --> W
     W --> V
     T --> Q
-    P --> T
-    R --> T
-    F --> R
 ```
 
 ## Directory Structure
@@ -141,7 +136,7 @@ prisma/
 
 **Identity Flow (Complete):**
 ```
-Real User Sign In -> Subscribe with real email -> Stripe webhook -> Provision by clerkId -> Email confirmation -> Dashboard shows real user data
+Real User Sign In -> Subscribe to subscription -> Stripe webhook -> Provision by clerkId -> Email confirmation -> Dashboard shows real user data
 ```
 
 **Architecture Highlights:**
@@ -252,9 +247,9 @@ Dashboard loads
 - **Benefit**: Prevents accidental user creation from UI
 
 ### 5. Environment Variable Decoupling
-- **Why**: Avoid cascade import failures
-- **How**: `TEST_USER_EMAIL` in separate constants file
-- **Benefit**: Routes don't depend on Stripe module
+- **Why**: Centralized configuration and validation
+- **How**: Environment variables centralized in `env.ts` with validation
+- **Benefit**: Routes don't depend on Stripe module, clear configuration
 
 ## Security Considerations
 
