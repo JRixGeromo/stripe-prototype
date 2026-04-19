@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { SignOutButton, UserButton } from '@clerk/nextjs'
 
 export default function DashboardPage() {
   const [user, setUser] = useState<{ email: string; plan: string } | null>(null)
@@ -39,7 +40,25 @@ export default function DashboardPage() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>
       <div style={{ maxWidth: '896px', margin: '0 auto', padding: '32px 16px' }}>
-        <h1 style={{ fontSize: '30px', fontWeight: 'bold', color: '#111827', marginBottom: '32px' }}>Dashboard</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '30px', fontWeight: 'bold', color: '#111827', margin: 0 }}>Dashboard</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <SignOutButton>
+              <button style={{ 
+                padding: '8px 16px', 
+                borderRadius: '6px', 
+                border: '1px solid #d1d5db', 
+                backgroundColor: 'white', 
+                color: '#374151', 
+                fontSize: '14px', 
+                cursor: 'pointer' 
+              }}>
+                Logout
+              </button>
+            </SignOutButton>
+            <UserButton />
+          </div>
+        </div>
         
         <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)', padding: '24px', marginBottom: '24px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', marginBottom: '16px' }}>Account Status</h2>

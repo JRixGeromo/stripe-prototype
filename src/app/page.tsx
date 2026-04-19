@@ -1,6 +1,6 @@
 'use client'
 
-import { SignInButton, UserButton, useUser } from '@clerk/nextjs'
+import { SignInButton, SignOutButton, UserButton, useUser } from '@clerk/nextjs'
 
 export default function Home() {
   const { isSignedIn } = useUser()
@@ -28,9 +28,25 @@ export default function Home() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb' }}>
       <div style={{ maxWidth: '448px', width: '100%', padding: '32px' }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div></div>
           {isSignedIn ? (
-            <UserButton />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <SignOutButton>
+                <button style={{ 
+                  padding: '8px 16px', 
+                  borderRadius: '6px', 
+                  border: '1px solid #d1d5db', 
+                  backgroundColor: 'white', 
+                  color: '#374151', 
+                  fontSize: '14px', 
+                  cursor: 'pointer' 
+                }}>
+                  Logout
+                </button>
+              </SignOutButton>
+              <UserButton />
+            </div>
           ) : (
             <SignInButton />
           )}
